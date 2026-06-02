@@ -669,200 +669,204 @@ st.set_page_config(
 st.title("Aplicación web de Métodos de Optimización")
 st.caption("Gradiente, Gradiente Conjugado y Newton con condiciones de Wolfe")
 
-with st.sidebar:
-    st.header("Datos de entrada")
-    n_vars = st.number_input("Número de variables", min_value=1, max_value=10, value=2, step=1)
-    method = st.selectbox(
-        "Método de optimización",
-        ["Método del gradiente", "Gradiente conjugado", "Método de Newton"],
+panel_resultados, panel_datos = st.columns([2.4, 1], gap="large")
+
+with panel_datos:
+    with st.container(border=True):
+        st.header("Datos de entrada")
+        n_vars = st.number_input("Número de variables", min_value=1, max_value=10, value=2, step=1)
+        method = st.selectbox(
+            "Método de optimización",
+            ["Método del gradiente", "Gradiente conjugado", "Método de Newton"],
+        )
+
+        default_function = "100*(x2 - x1**2)**2 + (1 - x1)**2" if n_vars == 2 else " + ".join([f"x{i}**2" for i in range(1, n_vars + 1)])
+        function_text = st.text_area(
+            "Función objetivo f(x)",
+            value=default_function,
+            help="Usa variables x1, x2, ..., xn. Puedes usar sin, cos, exp, log, sqrt, pi.",
+        )
+
+        default_x0 = "-1.2, 1" if n_vars == 2 else ", ".join(["1" for _ in range(n_vars)])
+        x0_text = st.text_input("Punto de partida", value=default_x0)
+        max_iter = st.number_input("Número máximo de iteraciones", min_value=1, max_value=5000, value=200, step=10)
+        tol = st.number_input("Tolerancia de convergencia", min_value=1e-12, max_value=1e-1, value=1e-6, format="%.1e")
+
+        st.subheader("Parámetros de Wolfe")
+        c1 = st.number_input("c1, primera condición de Wolfe", min_value=1e-8, max_value=0.49, value=1e-4, format="%.1e")
+        c2 = st.number_input("c2, segunda condición de Wolfe", min_value=0.50, max_value=0.999, value=0.90, format="%.3f")
+        alpha0 = st.number_input("alpha inicial", min_value=1e-12, max_value=100.0, value=1.0, format="%.4f")
+        alpha_max = st.number_input("alpha máximo", min_value=alpha0, max_value=1000.0, value=100.0, format="%.1f")
+
+        st.subheader("Valores agregados")
+        compare_methods = st.checkbox("Comparar automáticamente los 3 métodos", value=False)
+
+        run_button = st.button("Ejecutar método", type="primary", use_container_width=True)
+
+with panel_resultados:
+    st.info(
+        "Sintaxis: escribe la función usando x1, x2, ..., xn. Ejemplo: "
+        "`100*(x2 - x1**2)**2 + (1 - x1)**2`."
     )
 
-    default_function = "100*(x2 - x1**2)**2 + (1 - x1)**2" if n_vars == 2 else " + ".join([f"x{i}**2" for i in range(1, n_vars + 1)])
-    function_text = st.text_area(
-        "Función objetivo f(x)",
-        value=default_function,
-        help="Usa variables x1, x2, ..., xn. Puedes usar sin, cos, exp, log, sqrt, pi.",
-    )
+    if run_button:
+        try:
+            if not (0 < c1 < c2 < 1):
+                raise InputError("Los parámetros deben cumplir 0 < c1 < c2 < 1.")
 
-    default_x0 = "-1.2, 1" if n_vars == 2 else ", ".join(["1" for _ in range(n_vars)])
-    x0_text = st.text_input("Punto de partida", value=default_x0)
-    max_iter = st.number_input("Número máximo de iteraciones", min_value=1, max_value=5000, value=200, step=10)
-    tol = st.number_input("Tolerancia de convergencia", min_value=1e-12, max_value=1e-1, value=1e-6, format="%.1e")
+            x0 = parse_starting_point(x0_text, int(n_vars))
+            f, grad, hess, expr, variables = build_functions(function_text, int(n_vars))
 
-    st.subheader("Parámetros de Wolfe")
-    c1 = st.number_input("c1, primera condición de Wolfe", min_value=1e-8, max_value=0.49, value=1e-4, format="%.1e")
-    c2 = st.number_input("c2, segunda condición de Wolfe", min_value=0.50, max_value=0.999, value=0.90, format="%.3f")
-    alpha0 = st.number_input("alpha inicial", min_value=1e-12, max_value=100.0, value=1.0, format="%.4f")
-    alpha_max = st.number_input("alpha máximo", min_value=alpha0, max_value=1000.0, value=100.0, format="%.1f")
+            with st.spinner("Ejecutando optimización..."):
+                result = optimize(
+                    method=method,
+                    f=f,
+                    grad=grad,
+                    hess=hess,
+                    x0=x0,
+                    max_iter=int(max_iter),
+                    tol=float(tol),
+                    c1=float(c1),
+                    c2=float(c2),
+                    alpha0=float(alpha0),
+                    alpha_max=float(alpha_max),
+                )
 
-    st.subheader("Valores agregados")
-    compare_methods = st.checkbox("Comparar automáticamente los 3 métodos", value=False)
+            st.success("Optimización finalizada")
+            st.subheader("Resultados esperados")
 
-    run_button = st.button("Ejecutar método", type="primary", use_container_width=True)
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Valor de f(x*)", f"{result.f_min:.8g}")
+            col2.metric("Iteraciones", result.iterations)
+            col3.metric("Error final", f"{result.final_error:.3e}")
+            col4.metric("Método", method)
 
-st.info(
-    "Sintaxis: escribe la función usando x1, x2, ..., xn. Ejemplo: "
-    "`100*(x2 - x1**2)**2 + (1 - x1)**2`."
-)
+            st.markdown("**Punto mínimo encontrado:**")
+            point_df = pd.DataFrame(
+                {"variable": [str(v) for v in variables], "valor": result.x_min}
+            )
+            st.dataframe(point_df, use_container_width=True, hide_index=True)
 
-if run_button:
-    try:
-        if not (0 < c1 < c2 < 1):
-            raise InputError("Los parámetros deben cumplir 0 < c1 < c2 < 1.")
+            st.markdown("**Criterio de parada alcanzado:**")
+            st.write(result.stop_reason)
 
-        x0 = parse_starting_point(x0_text, int(n_vars))
-        f, grad, hess, expr, variables = build_functions(function_text, int(n_vars))
+            st.markdown("**Función interpretada por el sistema:**")
+            st.latex(sp.latex(expr))
 
-        with st.spinner("Ejecutando optimización..."):
-            result = optimize(
+            st.subheader("Gráfico de convergencia: error versus número de iteraciones")
+            st.pyplot(plot_convergence(result.history), clear_figure=True)
+
+            st.subheader("Tabla de iteraciones")
+            st.dataframe(result.history, use_container_width=True, hide_index=True)
+
+            csv = result.history.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Descargar historial en CSV",
+                data=csv,
+                file_name="historial_optimizacion.csv",
+                mime="text/csv",
+            )
+
+            st.subheader("Valor agregado: diagnóstico automático")
+            st.write(automatic_diagnosis(result, float(tol), int(max_iter)))
+
+            report_text = build_text_report(
                 method=method,
-                f=f,
-                grad=grad,
-                hess=hess,
-                x0=x0,
+                n_vars=int(n_vars),
+                function_text=function_text,
+                x0_text=x0_text,
                 max_iter=int(max_iter),
                 tol=float(tol),
                 c1=float(c1),
                 c2=float(c2),
                 alpha0=float(alpha0),
                 alpha_max=float(alpha_max),
+                result=result,
+            )
+            st.download_button(
+                "Descargar reporte completo en TXT",
+                data=report_text.encode("utf-8"),
+                file_name="reporte_optimizacion.txt",
+                mime="text/plain",
             )
 
-        st.success("Optimización finalizada")
-        st.subheader("Resultados esperados")
+            if compare_methods:
+                st.subheader("Valor agregado: comparación automática entre métodos")
+                comparison_results = {}
+                for method_to_compare in ["Método del gradiente", "Gradiente conjugado", "Método de Newton"]:
+                    try:
+                        comparison_results[method_to_compare] = optimize(
+                            method=method_to_compare,
+                            f=f,
+                            grad=grad,
+                            hess=hess,
+                            x0=x0,
+                            max_iter=int(max_iter),
+                            tol=float(tol),
+                            c1=float(c1),
+                            c2=float(c2),
+                            alpha0=float(alpha0),
+                            alpha_max=float(alpha_max),
+                        )
+                    except Exception as exc:
+                        st.warning(f"No se pudo ejecutar {method_to_compare}: {exc}")
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Valor de f(x*)", f"{result.f_min:.8g}")
-        col2.metric("Iteraciones", result.iterations)
-        col3.metric("Error final", f"{result.final_error:.3e}")
-        col4.metric("Método", method)
-
-        st.markdown("**Punto mínimo encontrado:**")
-        point_df = pd.DataFrame(
-            {"variable": [str(v) for v in variables], "valor": result.x_min}
-        )
-        st.dataframe(point_df, use_container_width=True, hide_index=True)
-
-        st.markdown("**Criterio de parada alcanzado:**")
-        st.write(result.stop_reason)
-
-        st.markdown("**Función interpretada por el sistema:**")
-        st.latex(sp.latex(expr))
-
-        st.subheader("Gráfico de convergencia: error versus número de iteraciones")
-        st.pyplot(plot_convergence(result.history), clear_figure=True)
-
-        st.subheader("Tabla de iteraciones")
-        st.dataframe(result.history, use_container_width=True, hide_index=True)
-
-        csv = result.history.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Descargar historial en CSV",
-            data=csv,
-            file_name="historial_optimizacion.csv",
-            mime="text/csv",
-        )
-
-        st.subheader("Valor agregado: diagnóstico automático")
-        st.write(automatic_diagnosis(result, float(tol), int(max_iter)))
-
-        report_text = build_text_report(
-            method=method,
-            n_vars=int(n_vars),
-            function_text=function_text,
-            x0_text=x0_text,
-            max_iter=int(max_iter),
-            tol=float(tol),
-            c1=float(c1),
-            c2=float(c2),
-            alpha0=float(alpha0),
-            alpha_max=float(alpha_max),
-            result=result,
-        )
-        st.download_button(
-            "Descargar reporte completo en TXT",
-            data=report_text.encode("utf-8"),
-            file_name="reporte_optimizacion.txt",
-            mime="text/plain",
-        )
-
-        if compare_methods:
-            st.subheader("Valor agregado: comparación automática entre métodos")
-            comparison_results = {}
-            for method_to_compare in ["Método del gradiente", "Gradiente conjugado", "Método de Newton"]:
-                try:
-                    comparison_results[method_to_compare] = optimize(
-                        method=method_to_compare,
-                        f=f,
-                        grad=grad,
-                        hess=hess,
-                        x0=x0,
-                        max_iter=int(max_iter),
-                        tol=float(tol),
-                        c1=float(c1),
-                        c2=float(c2),
-                        alpha0=float(alpha0),
-                        alpha_max=float(alpha_max),
+                if comparison_results:
+                    comparison_table = build_comparison_table(comparison_results)
+                    st.dataframe(comparison_table, use_container_width=True, hide_index=True)
+                    st.pyplot(plot_method_comparison(comparison_results), clear_figure=True)
+                    best_row = comparison_table.iloc[0]
+                    st.info(
+                        "Método recomendado para esta función: "
+                        f"{best_row['método']}, porque obtuvo el menor error final "
+                        "y, en caso de empate, menos iteraciones."
                     )
-                except Exception as exc:
-                    st.warning(f"No se pudo ejecutar {method_to_compare}: {exc}")
 
-            if comparison_results:
-                comparison_table = build_comparison_table(comparison_results)
-                st.dataframe(comparison_table, use_container_width=True, hide_index=True)
-                st.pyplot(plot_method_comparison(comparison_results), clear_figure=True)
-                best_row = comparison_table.iloc[0]
-                st.info(
-                    "Método recomendado para esta función: "
-                    f"{best_row['método']}, porque obtuvo el menor error final "
-                    "y, en caso de empate, menos iteraciones."
+            st.subheader("Valor agregado")
+            if int(n_vars) == 1:
+                st.write("Se muestra la función en una dimensión junto con los puntos visitados por el método.")
+                st.pyplot(plot_1d_function(f, result.path), clear_figure=True)
+            elif int(n_vars) == 2:
+                st.write("Se muestra la trayectoria del algoritmo sobre curvas de nivel de la función objetivo.")
+                st.pyplot(plot_2d_contour(f, result.path), clear_figure=True)
+            else:
+                st.write(
+                    "Para más de dos variables, el valor agregado consiste en la tabla completa de iteraciones, "
+                    "la verificación de Wolfe por paso y la descarga del historial en CSV."
                 )
 
-        st.subheader("Valor agregado")
-        if int(n_vars) == 1:
-            st.write("Se muestra la función en una dimensión junto con los puntos visitados por el método.")
-            st.pyplot(plot_1d_function(f, result.path), clear_figure=True)
-        elif int(n_vars) == 2:
-            st.write("Se muestra la trayectoria del algoritmo sobre curvas de nivel de la función objetivo.")
-            st.pyplot(plot_2d_contour(f, result.path), clear_figure=True)
-        else:
-            st.write(
-                "Para más de dos variables, el valor agregado consiste en la tabla completa de iteraciones, "
-                "la verificación de Wolfe por paso y la descarga del historial en CSV."
-            )
+            with st.expander("Detalles de implementación"):
+                st.write(
+                    "El error reportado corresponde a la norma euclidiana del gradiente, ||∇f(x)||. "
+                    "La búsqueda de línea verifica Armijo y curvatura fuerte de Wolfe en cada paso. "
+                    "Si Newton genera una dirección que no es de descenso, la aplicación usa descenso por gradiente como respaldo."
+                )
 
-        with st.expander("Detalles de implementación"):
-            st.write(
-                "El error reportado corresponde a la norma euclidiana del gradiente, ||∇f(x)||. "
-                "La búsqueda de línea verifica Armijo y curvatura fuerte de Wolfe en cada paso. "
-                "Si Newton genera una dirección que no es de descenso, la aplicación usa descenso por gradiente como respaldo."
-            )
+        except InputError as exc:
+            st.error(str(exc))
+        except FloatingPointError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error("Ocurrió un error inesperado durante la ejecución.")
+            st.exception(exc)
+    else:
+        st.subheader("Qué hace esta aplicación")
+        st.write(
+            "La aplicación recibe el número de variables, el método, la función objetivo, "
+            "el punto de partida, el máximo de iteraciones, la tolerancia y los parámetros de Wolfe. "
+            "Luego muestra el punto mínimo encontrado, el valor objetivo, el número de iteraciones, "
+            "el error final, el criterio de parada, el gráfico de convergencia y un valor agregado visual o exportable."
+        )
 
-    except InputError as exc:
-        st.error(str(exc))
-    except FloatingPointError as exc:
-        st.error(str(exc))
-    except Exception as exc:
-        st.error("Ocurrió un error inesperado durante la ejecución.")
-        st.exception(exc)
-else:
-    st.subheader("Qué hace esta aplicación")
-    st.write(
-        "La aplicación recibe el número de variables, el método, la función objetivo, "
-        "el punto de partida, el máximo de iteraciones, la tolerancia y los parámetros de Wolfe. "
-        "Luego muestra el punto mínimo encontrado, el valor objetivo, el número de iteraciones, "
-        "el error final, el criterio de parada, el gráfico de convergencia y un valor agregado visual o exportable."
-    )
-
-    st.subheader("Prueba rápida sugerida")
-    st.code(
-        "Número de variables: 2\n"
-        "Función: 100*(x2 - x1**2)**2 + (1 - x1)**2\n"
-        "Punto de partida: -1.2, 1\n"
-        "Método: Método de Newton\n"
-        "Tolerancia: 1e-6",
-        language="text",
-    )
+        st.subheader("Prueba rápida sugerida")
+        st.code(
+            "Número de variables: 2\n"
+            "Función: 100*(x2 - x1**2)**2 + (1 - x1)**2\n"
+            "Punto de partida: -1.2, 1\n"
+            "Método: Método de Newton\n"
+            "Tolerancia: 1e-6",
+            language="text",
+        )
 
 
-# Valores agregados nuevos implementados: comparación automática, diagnóstico y reporte TXT.
+    # Valores agregados nuevos implementados: comparación automática, diagnóstico y reporte TXT.

@@ -26,6 +26,9 @@ ALLOWED_NAMES: Dict[str, object] = {
     "E": sp.E,
 }
 
+METHODS = ["Método del gradiente", "Gradiente conjugado", "Método de Newton"]
+AUTO_METHOD = "Recomendación automática"
+
 
 class InputError(Exception):
     """Error controlado para entradas del usuario."""
@@ -595,6 +598,56 @@ def build_comparison_table(results_by_method: Dict[str, OptimizationOutput]) -> 
     )
 
 
+def recommend_method(
+    f: Callable,
+    grad: Callable,
+    hess: Callable,
+    x0: np.ndarray,
+    max_iter: int,
+    tol: float,
+    c1: float,
+    c2: float,
+    alpha0: float,
+    alpha_max: float,
+) -> Tuple[str, OptimizationOutput, Dict[str, OptimizationOutput], pd.DataFrame]:
+    """Ejecuta los tres métodos y recomienda el mejor para la función ingresada.
+
+    Criterio usado:
+    1. menor error final,
+    2. menor número de iteraciones,
+    3. menor valor de la función objetivo.
+    """
+    results_by_method = {}
+    errors_by_method = {}
+
+    for method_name in METHODS:
+        try:
+            results_by_method[method_name] = optimize(
+                method=method_name,
+                f=f,
+                grad=grad,
+                hess=hess,
+                x0=x0,
+                max_iter=max_iter,
+                tol=tol,
+                c1=c1,
+                c2=c2,
+                alpha0=alpha0,
+                alpha_max=alpha_max,
+            )
+        except Exception as exc:
+            errors_by_method[method_name] = str(exc)
+
+    if not results_by_method:
+        raise RuntimeError("No se pudo ejecutar ningún método de optimización.")
+
+    comparison_table = build_comparison_table(results_by_method).sort_values(
+        by=["error final", "iteraciones", "f(x*)"], ascending=[True, True, True]
+    )
+    best_method = str(comparison_table.iloc[0]["método"])
+    return best_method, results_by_method[best_method], results_by_method, comparison_table
+
+
 def automatic_diagnosis(result: OptimizationOutput, tol: float, max_iter: int) -> str:
     """Genera una conclusión breve a partir del resultado numérico."""
     if result.final_error <= tol:
@@ -677,7 +730,8 @@ with panel_datos:
         n_vars = st.number_input("Número de variables", min_value=1, max_value=10, value=2, step=1)
         method = st.selectbox(
             "Método de optimización",
-            ["Método del gradiente", "Gradiente conjugado", "Método de Newton"],
+            [AUTO_METHOD] + METHODS,
+            help="Elige un método específico o deja que la app ejecute los tres y recomiende el mejor.",
         )
 
         default_function = "100*(x2 - x1**2)**2 + (1 - x1)**2" if n_vars == 2 else " + ".join([f"x{i}**2" for i in range(1, n_vars + 1)])
@@ -717,29 +771,53 @@ with panel_resultados:
             x0 = parse_starting_point(x0_text, int(n_vars))
             f, grad, hess, expr, variables = build_functions(function_text, int(n_vars))
 
+            recommendation_results = {}
+            recommendation_table = None
+            selected_method = method
+
             with st.spinner("Ejecutando optimización..."):
-                result = optimize(
-                    method=method,
-                    f=f,
-                    grad=grad,
-                    hess=hess,
-                    x0=x0,
-                    max_iter=int(max_iter),
-                    tol=float(tol),
-                    c1=float(c1),
-                    c2=float(c2),
-                    alpha0=float(alpha0),
-                    alpha_max=float(alpha_max),
-                )
+                if method == AUTO_METHOD:
+                    selected_method, result, recommendation_results, recommendation_table = recommend_method(
+                        f=f,
+                        grad=grad,
+                        hess=hess,
+                        x0=x0,
+                        max_iter=int(max_iter),
+                        tol=float(tol),
+                        c1=float(c1),
+                        c2=float(c2),
+                        alpha0=float(alpha0),
+                        alpha_max=float(alpha_max),
+                    )
+                else:
+                    result = optimize(
+                        method=method,
+                        f=f,
+                        grad=grad,
+                        hess=hess,
+                        x0=x0,
+                        max_iter=int(max_iter),
+                        tol=float(tol),
+                        c1=float(c1),
+                        c2=float(c2),
+                        alpha0=float(alpha0),
+                        alpha_max=float(alpha_max),
+                    )
 
             st.success("Optimización finalizada")
+            if method == AUTO_METHOD:
+                st.info(
+                    "Método recomendado para esta función: "
+                    f"{selected_method}. La recomendación se basa en menor error final, "
+                    "menor número de iteraciones y menor valor de la función objetivo."
+                )
             st.subheader("Resultados esperados")
 
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Valor de f(x*)", f"{result.f_min:.8g}")
             col2.metric("Iteraciones", result.iterations)
             col3.metric("Error final", f"{result.final_error:.3e}")
-            col4.metric("Método", method)
+            col4.metric("Método", selected_method)
 
             st.markdown("**Punto mínimo encontrado:**")
             point_df = pd.DataFrame(
@@ -771,7 +849,7 @@ with panel_resultados:
             st.write(automatic_diagnosis(result, float(tol), int(max_iter)))
 
             report_text = build_text_report(
-                method=method,
+                method=selected_method,
                 n_vars=int(n_vars),
                 function_text=function_text,
                 x0_text=x0_text,
@@ -790,36 +868,41 @@ with panel_resultados:
                 mime="text/plain",
             )
 
-            if compare_methods:
-                st.subheader("Valor agregado: comparación automática entre métodos")
-                comparison_results = {}
-                for method_to_compare in ["Método del gradiente", "Gradiente conjugado", "Método de Newton"]:
-                    try:
-                        comparison_results[method_to_compare] = optimize(
-                            method=method_to_compare,
-                            f=f,
-                            grad=grad,
-                            hess=hess,
-                            x0=x0,
-                            max_iter=int(max_iter),
-                            tol=float(tol),
-                            c1=float(c1),
-                            c2=float(c2),
-                            alpha0=float(alpha0),
-                            alpha_max=float(alpha_max),
-                        )
-                    except Exception as exc:
-                        st.warning(f"No se pudo ejecutar {method_to_compare}: {exc}")
+            if compare_methods or method == AUTO_METHOD:
+                st.subheader("Valor agregado: recomendación y comparación automática entre métodos")
 
-                if comparison_results:
-                    comparison_table = build_comparison_table(comparison_results)
+                if method == AUTO_METHOD and recommendation_results:
+                    comparison_results = recommendation_results
+                    comparison_table = recommendation_table
+                else:
+                    comparison_results = {}
+                    for method_to_compare in METHODS:
+                        try:
+                            comparison_results[method_to_compare] = optimize(
+                                method=method_to_compare,
+                                f=f,
+                                grad=grad,
+                                hess=hess,
+                                x0=x0,
+                                max_iter=int(max_iter),
+                                tol=float(tol),
+                                c1=float(c1),
+                                c2=float(c2),
+                                alpha0=float(alpha0),
+                                alpha_max=float(alpha_max),
+                            )
+                        except Exception as exc:
+                            st.warning(f"No se pudo ejecutar {method_to_compare}: {exc}")
+                    comparison_table = build_comparison_table(comparison_results) if comparison_results else None
+
+                if comparison_results and comparison_table is not None:
                     st.dataframe(comparison_table, use_container_width=True, hide_index=True)
                     st.pyplot(plot_method_comparison(comparison_results), clear_figure=True)
                     best_row = comparison_table.iloc[0]
                     st.info(
                         "Método recomendado para esta función: "
-                        f"{best_row['método']}, porque obtuvo el menor error final "
-                        "y, en caso de empate, menos iteraciones."
+                        f"{best_row['método']}, porque obtuvo el menor error final, "
+                        "luego menos iteraciones y finalmente menor valor de f(x*)."
                     )
 
             st.subheader("Valor agregado")

@@ -557,7 +557,7 @@ def plot_2d_contour(f: Callable, path: List[np.ndarray]):
     ax.scatter([pts[-1, 0]], [pts[-1, 1]], s=80, zorder=4)
     ax.set_xlabel("x1")
     ax.set_ylabel("x2")
-    ax.set_title("Valor agregado: trayectoria sobre curvas de nivel")
+    ax.set_title("Trayectoria sobre curvas de nivel")
     ax.grid(True, alpha=0.3)
     return fig
 
@@ -572,7 +572,7 @@ def plot_method_comparison(results_by_method: Dict[str, OptimizationOutput]):
         ax.plot(hist["iteración"], hist["error ||∇f||"], marker="o", label=method_name)
     ax.set_xlabel("Iteración")
     ax.set_ylabel("Error ||∇f(x)||")
-    ax.set_title("Valor agregado: comparación de convergencia entre métodos")
+    ax.set_title("Comparación de convergencia entre métodos")
     ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
     ax.legend()
@@ -752,7 +752,7 @@ with panel_datos:
         alpha0 = st.number_input("alpha inicial", min_value=1e-12, max_value=100.0, value=1.0, format="%.4f")
         alpha_max = st.number_input("alpha máximo", min_value=alpha0, max_value=1000.0, value=100.0, format="%.1f")
 
-        st.subheader("Valores agregados")
+        st.subheader("Herramientas de análisis")
         compare_methods = st.checkbox("Comparar automáticamente los 3 métodos", value=False)
 
         run_button = st.button("Ejecutar método", type="primary", use_container_width=True)
@@ -845,7 +845,7 @@ with panel_resultados:
                 mime="text/csv",
             )
 
-            st.subheader("Valor agregado: diagnóstico automático")
+            st.subheader("Diagnóstico automático")
             st.write(automatic_diagnosis(result, float(tol), int(max_iter)))
 
             report_text = build_text_report(
@@ -869,7 +869,7 @@ with panel_resultados:
             )
 
             if compare_methods or method == AUTO_METHOD:
-                st.subheader("Valor agregado: recomendación y comparación automática entre métodos")
+                st.subheader("Recomendación y comparación automática entre métodos")
 
                 if method == AUTO_METHOD and recommendation_results:
                     comparison_results = recommendation_results
@@ -905,7 +905,7 @@ with panel_resultados:
                         "luego menos iteraciones y finalmente menor valor de f(x*)."
                     )
 
-            st.subheader("Valor agregado")
+            st.subheader("Análisis adicional")
             if int(n_vars) == 1:
                 st.write("Se muestra la función en una dimensión junto con los puntos visitados por el método.")
                 st.pyplot(plot_1d_function(f, result.path), clear_figure=True)
@@ -914,7 +914,7 @@ with panel_resultados:
                 st.pyplot(plot_2d_contour(f, result.path), clear_figure=True)
             else:
                 st.write(
-                    "Para más de dos variables, el valor agregado consiste en la tabla completa de iteraciones, "
+                    "Para más de dos variables, la app muestra la tabla completa de iteraciones, "
                     "la verificación de Wolfe por paso y la descarga del historial en CSV."
                 )
 
@@ -938,7 +938,7 @@ with panel_resultados:
             "La aplicación recibe el número de variables, el método, la función objetivo, "
             "el punto de partida, el máximo de iteraciones, la tolerancia y los parámetros de Wolfe. "
             "Luego muestra el punto mínimo encontrado, el valor objetivo, el número de iteraciones, "
-            "el error final, el criterio de parada, el gráfico de convergencia y un valor agregado visual o exportable."
+            "el error final, el criterio de parada, el gráfico de convergencia y herramientas de análisis visual o exportable."
         )
 
         st.subheader("Prueba rápida sugerida")
@@ -952,4 +952,4 @@ with panel_resultados:
         )
 
 
-    # Valores agregados nuevos implementados: comparación automática, diagnóstico y reporte TXT.
+    # Herramientas de análisis implementadas: comparación automática, diagnóstico y reporte TXT.

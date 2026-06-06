@@ -504,7 +504,7 @@ def plot_convergence(history: pd.DataFrame):
     fig, ax = plt.subplots()
     ax.plot(history["iteración"], history["error ||∇f||"], marker="o")
     ax.set_xlabel("Iteración")
-    ax.set_ylabel("Error ||∇f(x)||")
+    ax.set_ylabel("||∇f(x)||")
     ax.set_title("Gráfico de convergencia")
     ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
